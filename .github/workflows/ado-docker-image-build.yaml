@@ -1,0 +1,32 @@
+trigger: none  # Prevent CI trigger on push
+
+pr:
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  imageName: 'sample-app-aoai-chatgpt'
+  acrLoginServer: 'sampleappaoaichatgpt.azurecr.io'
+
+stages:
+- stage: Build
+  displayName: 'Docker Build for PR Validation'
+  jobs:
+  - job: BuildDockerImage
+    displayName: 'Build Docker Image'
+    steps:
+
+    - task: Checkout@1
+      displayName: 'Checkout Repository'
+
+    - script: |
+        echo "Building Docker image for PR validation..."
+        imageTag=$(date +'%Y-%m-%d')_${BUILD_BUILDID}
+        docker build . \
+          -f WebApp.Dockerfile \
+          -t ${{ variables.acrLoginServer }}/${{ variables.imageName }}:$imageTag
+      displayName: 'Build Docker Image'
