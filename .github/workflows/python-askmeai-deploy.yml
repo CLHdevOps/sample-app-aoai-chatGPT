@@ -1,0 +1,71 @@
+trigger:
+  branches:
+    include:
+      - main
+
+pr: none  # Optional: disable PR trigger
+
+stages:
+- stage: Build
+  displayName: 'Build Python App'
+  jobs:
+  - job: BuildJob
+    displayName: 'Build and Package'
+    pool:
+      vmImage: 'ubuntu-latest'
+
+    steps:
+    - task: UsePythonVersion@0
+      inputs:
+        versionSpec: '3.11'
+        addToPath: true
+
+    - checkout: self
+
+    - script: |
+        python -m venv venv
+        source venv/bin/activate
+      displayName: 'Create and Activate Virtual Environment'
+
+    - script: |
+        pip install -r requirements.txt
+      displayName: 'Install Dependencies'
+
+    # Optional: Insert test step here
+    # - script: pytest tests/
+
+    - script: |
+        zip -r release.zip . -x "venv/*"
+      displayName: 'Create Deployment Zip'
+
+    - task: PublishBuildArtifacts@1
+      inputs:
+        PathtoPublish: 'release.zip'
+        ArtifactName: 'python-app'
+        publishLocation: 'Container'
+
+- stage: Deploy
+  displayName: 'Deploy to Azure Web App'
+  dependsOn: Build
+  condition: succeeded()
+
+  jobs:
+  - job: DeployJob
+    displayName: 'Deploy to App Service'
+    pool:
+      vmImage: 'ubuntu-latest'
+
+    steps:
+    - download: current
+      artifact: 'python-app'
+
+    - script: unzip release.zip
+      displayName: 'Unzip Artifact'
+
+    - task: AzureWebApp@1
+      displayName: 'Deploy to Azure Web App'
+      inputs:
+        azureSubscription: '<your-service-connection-name>'
+        appType: 'webAppLinux'
+        appName: 'sample-app-github-cd'
+        package: '$(Pipeline.Workspace)/python-app/release.zip'
