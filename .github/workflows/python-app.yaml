@@ -1,0 +1,88 @@
+trigger:
+  branches:
+    include:
+      - main
+
+pr:
+  branches:
+    include:
+      - main
+
+variables:
+  pythonVersion: '3.11'
+
+stages:
+- stage: Test
+  jobs:
+  - job: Test_Linux
+    displayName: 'Test on Linux (Ubuntu)'
+    pool:
+      vmImage: 'ubuntu-latest'
+
+    steps:
+    - task: UsePythonVersion@0
+      inputs:
+        versionSpec: '$(pythonVersion)'
+        addToPath: true
+
+    - checkout: self
+
+    - script: |
+        python -m pip install --upgrade pip
+        pip install -r requirements-dev.txt
+      displayName: 'Install dependencies'
+
+    - script: |
+        export PYTHONPATH=$(pwd)
+        coverage run -m pytest -v --show-capture=stdout
+        coverage report -m --include=app.py,backend/*,tests/*
+        coverage xml
+      displayName: 'Run tests with coverage'
+      env:
+        AZURE_OPENAI_ENDPOINT: $(AZUREOPENAIENDPOINT)
+        AZURE_OPENAI_MODEL: $(AZUREOPENAIMODEL)
+        AZURE_OPENAI_KEY: $(AZUREOPENAIKEY)
+        AZURE_OPENAI_EMBEDDING_NAME: $(AZUREOPENAIEMBEDDINGNAME)
+        AZURE_COSMOSDB_ACCOUNT: $(AZURECOSMOSDBACCOUNT)
+        AZURE_COSMOSDB_DATABASE: $(AZURECOSMOSDBDATABASE)
+        AZURE_COSMOSDB_CONVERSATIONS_CONTAINER: $(AZURECOSMOSDBCONVERSATIONSCONTAINER)
+        AZURE_COSMOSDB_ACCOUNT_KEY: $(AZURECOSMOSDBACCOUNTKEY)
+        AZURE_SEARCH_SERVICE: $(AZURESEARCHSERVICE)
+        AZURE_SEARCH_INDEX: $(AZURESEARCHINDEX)
+        AZURE_SEARCH_KEY: $(AZURESEARCHKEY)
+        AZURE_SEARCH_QUERY: $(AZURESEARCHQUERY)
+        ELASTICSEARCH_EMBEDDING_MODEL_ID: $(ELASTICSEARCHEMBEDDINGMODELID)
+        ELASTICSEARCH_ENCODED_API_KEY: $(ELASTICSEARCHENCODEDAPIKEY)
+        ELASTICSEARCH_ENDPOINT: $(ELASTICSEARCHENDPOINT)
+        ELASTICSEARCH_INDEX: $(ELASTICSEARCHINDEX)
+        ELASTICSEARCH_QUERY: $(ELASTICSEARCHQUERY)
+
+    - script: |
+        pip install lxml
+        echo "##[group]Code Coverage Summary"
+        python -c "import xml.etree.ElementTree as ET; tree = ET.parse('coverage.xml'); root = tree.getroot(); print('Coverage:', root.attrib.get('line-rate'))"
+        echo "##[endgroup]"
+      displayName: 'Code Coverage Report (basic)'
+
+  - job: Test_Windows
+    displayName: 'Test on Windows'
+    pool:
+      vmImage: 'windows-latest'
+
+    steps:
+    - task: UsePythonVersion@0
+      inputs:
+        versionSpec: '$(pythonVersion)'
+        addToPath: true
+
+    - checkout: self
+
+    - script: |
+        python -m pip install --upgrade pip
+        pip install -r requirements-dev.txt
+      displayName: 'Install dependencies'
+
+    - powershell: |
+        $env:PYTHONPATH = "$(Get-Location)"
+        pytest -v --show-capture=stdout -k "not integration"
+      displayName: 'Run tests with pytest (unit only)'
